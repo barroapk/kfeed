@@ -1,0 +1,42 @@
+name: Pronos
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pronos
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      REPO: ${{ github.repository }}
+      OLD: barroapk/kounadia-data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Etat precedent
+        run: |
+          mkdir -p data out
+          node scripts/kio.mjs pull pronos today.json history.json picks.json nt_seen.json published.json
+      - name: Calcul
+        run: node scripts/scrape.mjs > /dev/null
+      - name: Publier
+        run: |
+          mkdir pub
+          cp data/today.json data/history.json data/picks.json data/nt_seen.json data/published.json pub/
+          node scripts/kio.mjs seal pub
+          cd pub
+          git init -q
+          git checkout -q -b pronos
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" pronos

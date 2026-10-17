@@ -1,0 +1,38 @@
+name: Migration
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      REPO: ${{ github.repository }}
+      OLD: barroapk/kounadia-data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Copier les donnees chiffrees
+        run: |
+          for spec in "pronos today.json history.json picks.json nt_seen.json published.json" \
+                      "scores scores.json" "markets markets.json" \
+                      "vip vip.json vip_history.json vip_log.json vip_stats.json" \
+                      "archive archive.json backtest.json vip_params.json"; do
+            set -- $spec; b=$1; shift
+            rm -rf data pub; mkdir pub
+            node scripts/kio.mjs pull $b "$@"
+            for f in "$@"; do [ -f "data/$f" ] && cp "data/$f" pub/; done
+            node scripts/kio.mjs seal pub
+            (cd pub && git init -q && git checkout -q -b $b && git add . \
+              && git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj" \
+              && git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" $b)
+            echo "OK $b : $(ls pub | wc -l) fichiers"
+          done

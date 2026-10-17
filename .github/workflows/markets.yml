@@ -1,0 +1,43 @@
+name: Marches
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: markets
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      REPO: ${{ github.repository }}
+      OLD: barroapk/kounadia-data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Etat precedent
+        run: |
+          mkdir -p data out
+          node scripts/kio.mjs pull scores scores.json
+          node scripts/kio.mjs pull markets markets.json
+      - name: Calcul
+        run: node scripts/markets.mjs > /dev/null
+      - name: Publier
+        run: |
+          mkdir pub
+          cp out/markets.json pub/
+          node scripts/kio.mjs seal pub
+          cd pub
+          git init -q
+          git checkout -q -b markets
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" markets

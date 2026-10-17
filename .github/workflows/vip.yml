@@ -1,0 +1,52 @@
+name: VIP
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Recalculer le VIP du jour'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: vip
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      REPO: ${{ github.repository }}
+      OLD: barroapk/kounadia-data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Etat precedent
+        run: |
+          mkdir -p data out
+          node scripts/kio.mjs pull scores scores.json
+          node scripts/kio.mjs pull markets markets.json
+          node scripts/kio.mjs pull vip vip.json vip_history.json vip_log.json
+          node scripts/kio.mjs pull archive vip_params.json
+      - name: Calcul
+        run: node scripts/vip.mjs > /dev/null
+        env:
+          VIP_FORCE: ${{ inputs.force && '1' || '0' }}
+      - name: Publier
+        run: |
+          mkdir pub
+          cp out/vip.json out/vip_history.json out/vip_log.json out/vip_stats.json pub/
+          node scripts/kio.mjs seal pub
+          cd pub
+          git init -q
+          git checkout -q -b vip
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" vip
