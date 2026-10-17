@@ -1,5 +1,7 @@
 name: Marches
 on:
+  schedule:
+    - cron: '20 5,13 * * *'
   workflow_dispatch:
 permissions:
   contents: write
@@ -13,7 +15,6 @@ jobs:
     env:
       KD_KEY: ${{ secrets.KD_KEY }}
       REPO: ${{ github.repository }}
-      OLD: barroapk/kounadia-data
     steps:
       - uses: actions/checkout@v4
         with:

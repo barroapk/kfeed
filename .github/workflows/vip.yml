@@ -1,5 +1,7 @@
 name: VIP
 on:
+  schedule:
+    - cron: '5,35 * * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -18,7 +20,6 @@ jobs:
     env:
       KD_KEY: ${{ secrets.KD_KEY }}
       REPO: ${{ github.repository }}
-      OLD: barroapk/kounadia-data
     steps:
       - uses: actions/checkout@v4
         with:
