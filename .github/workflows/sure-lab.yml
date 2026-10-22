@@ -1,0 +1,25 @@
+name: Laboratoire Coup sur
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Donnees
+        run: |
+          mkdir -p data
+          node scripts/kio.mjs pull archive archive.json vip_params.json
+      - name: Laboratoire (totaux seulement, aucun match affiche)
+        run: node scripts/sure_lab.mjs
