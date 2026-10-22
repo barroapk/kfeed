@@ -28,6 +28,7 @@ jobs:
         run: |
           mkdir -p data out
           node scripts/kio.mjs pull pronos today.json history.json picks.json nt_seen.json published.json
+          node scripts/kio.mjs pull scores scores.json
       - name: Calcul
         run: node scripts/scrape.mjs > /dev/null
       - name: Publier
