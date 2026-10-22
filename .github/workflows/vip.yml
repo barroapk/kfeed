@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 10
     env:
       KD_KEY: ${{ secrets.KD_KEY }}
+      PK_KEY: ${{ secrets.PK_KEY }}
       REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +37,10 @@ jobs:
           node scripts/kio.mjs pull markets markets.json
           node scripts/kio.mjs pull vip vip.json vip_history.json vip_log.json
           node scripts/kio.mjs pull archive vip_params.json
+          # Vrai Coup sûr du jour (clé Premium) ; jamais la carte « mets à jour » des anciennes versions.
+          node scripts/kio.mjs pull vip vip_p.json
+          if [ -f data/vip_p.json ]; then mv -f data/vip_p.json data/vip.json; fi
+          if grep -q '"upgrade":true' data/vip.json 2>/dev/null; then rm -f data/vip.json; fi
       - name: Calcul
         run: node scripts/vip.mjs > /dev/null
         env:
@@ -43,8 +48,10 @@ jobs:
       - name: Publier
         run: |
           mkdir pub
-          cp out/vip.json out/vip_history.json out/vip_log.json out/vip_stats.json pub/
-          node scripts/kio.mjs seal pub
+          cp out/vip_history.json out/vip_log.json out/vip_stats.json pub/
+          cp out/vip.json pub/vip_p.json
+          node scripts/upgrade.mjs vip pub/vip.json
+          PRIVATE=vip_p.json,vip_log.json node scripts/kio.mjs seal pub
           cd pub
           git init -q
           git checkout -q -b vip

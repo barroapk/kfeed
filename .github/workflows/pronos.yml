@@ -14,6 +14,7 @@ jobs:
     timeout-minutes: 15
     env:
       KD_KEY: ${{ secrets.KD_KEY }}
+      PK_KEY: ${{ secrets.PK_KEY }}
       REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
@@ -29,13 +30,19 @@ jobs:
           mkdir -p data out
           node scripts/kio.mjs pull pronos today.json history.json picks.json nt_seen.json published.json
           node scripts/kio.mjs pull scores scores.json
+          # Vrai contenu du jour (clé Premium) ; jamais la carte « mets à jour » des anciennes versions.
+          node scripts/kio.mjs pull pronos today_p.json
+          if [ -f data/today_p.json ]; then mv -f data/today_p.json data/today.json; fi
+          if grep -q '"upgrade":true' data/today.json 2>/dev/null; then rm -f data/today.json; fi
       - name: Calcul
         run: node scripts/scrape.mjs > /dev/null
       - name: Publier
         run: |
           mkdir pub
-          cp data/today.json data/history.json data/picks.json data/nt_seen.json data/published.json pub/
-          node scripts/kio.mjs seal pub
+          cp data/history.json data/picks.json data/nt_seen.json data/published.json pub/
+          cp data/today.json pub/today_p.json
+          node scripts/upgrade.mjs pronos pub/today.json
+          PRIVATE=today_p.json,published.json,picks.json,nt_seen.json node scripts/kio.mjs seal pub
           cd pub
           git init -q
           git checkout -q -b pronos
