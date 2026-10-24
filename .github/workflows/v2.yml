@@ -36,6 +36,9 @@ jobs:
           node scripts/kio.mjs pull scores scores.json
           node scripts/kio.mjs pull markets markets.json
           node scripts/kio.mjs pull v2 v2_state.json fd.json
+          # Pronostics Expert (analystes) du jour, pour la Sélection.
+          node scripts/kio.mjs pull pronos today_p.json
+          if [ -f data/today_p.json ]; then mv -f data/today_p.json data/today.json; fi
       - name: football-data (source de secours)
         run: node scripts/v2/fd.mjs data/fd.json || true
       - name: Calcul
