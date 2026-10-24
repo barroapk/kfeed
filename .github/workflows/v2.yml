@@ -1,0 +1,56 @@
+name: V2
+on:
+  schedule:
+    - cron: '12,42 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Calculer le jour même avant 05:00 UTC'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: v2
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      PK_KEY: ${{ secrets.PK_KEY }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Etat precedent
+        run: |
+          mkdir -p data out
+          node scripts/kio.mjs pull scores scores.json
+          node scripts/kio.mjs pull markets markets.json
+          node scripts/kio.mjs pull v2 v2_state.json fd.json
+      - name: football-data (source de secours)
+        run: node scripts/v2/fd.mjs data/fd.json || true
+      - name: Calcul
+        run: node scripts/v2/engine.mjs
+        env:
+          V2_FORCE: ${{ inputs.force && '1' || '0' }}
+      - name: Publier
+        run: |
+          mkdir pub
+          cp out/v2.json out/v2_p.json out/v2_state.json pub/
+          [ -f data/fd.json ] && cp data/fd.json pub/ || true
+          PRIVATE=v2_p.json,v2_state.json node scripts/kio.mjs seal pub
+          cd pub
+          git init -q
+          git checkout -q -b v2
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" v2
