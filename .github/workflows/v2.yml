@@ -50,6 +50,7 @@ jobs:
           mkdir pub
           cp out/v2.json out/v2_p.json out/v2_state.json pub/
           [ -f data/fd.json ] && cp data/fd.json pub/ || true
+          [ -f out/ligues.json ] && cp out/ligues.json pub/ || true
           PRIVATE=v2_p.json,v2_state.json node scripts/kio.mjs seal pub
           cd pub
           git init -q
