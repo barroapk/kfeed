@@ -1,0 +1,54 @@
+name: Audit
+# Publie en clair les RÉSULTATS PASSÉS (jamais les choix du jour) pour l'analyse des formules.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      PK_KEY: ${{ secrets.PK_KEY }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lire les résultats
+        run: |
+          mkdir -p data
+          node scripts/kio.mjs pull v2 v2_state.json
+          node scripts/kio.mjs pull pronos history.json
+          node scripts/kio.mjs pull vip vip_history.json vip_stats.json
+          node scripts/kio.mjs pull scores scores.json
+          node scripts/kio.mjs pull markets markets.json
+      - name: Garder seulement le passé
+        run: |
+          mkdir -p pub
+          node -e '
+          const fs=require("fs"); const r=(f)=>{try{return JSON.parse(fs.readFileSync("data/"+f,"utf8"))}catch{return null}};
+          const today=new Date().toISOString().slice(0,10);
+          const st=r("v2_state.json")||{days:[]};
+          fs.writeFileSync("pub/v2_days.json", JSON.stringify((st.days||[]).filter(d=>d.day<today)));
+          for (const f of ["history.json","vip_history.json","vip_stats.json"]) { const x=r(f); if (x) fs.writeFileSync("pub/"+f, JSON.stringify(x)); }
+          // Matchs terminés des 3 derniers jours (scores + marchés) pour vérifier les formules sur tout le week-end.
+          const sc=r("scores.json")||{days:{}}; const mk=(r("markets.json")||{}).m||{};
+          const done=Object.values(sc.days||{}).flat().filter(m=>m.status==="finished"&&m.date&&m.date.slice(0,10)<today);
+          fs.writeFileSync("pub/finished.json", JSON.stringify(done.map(m=>({...m, mk: mk[m.id]||null}))));
+          console.log("v2 jours", (st.days||[]).filter(d=>d.day<today).length, "matchs terminés", done.length);
+          '
+      - name: Publier (branche audit, en clair)
+        run: |
+          cd pub
+          git init -q
+          git checkout -q -b audit
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "audit $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" audit
