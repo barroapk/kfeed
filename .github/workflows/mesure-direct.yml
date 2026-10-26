@@ -1,0 +1,65 @@
+name: Mesure du direct
+# Compare la vitesse des sources du direct : PrimaTips (source actuelle du robot) et ESPN (grands championnats).
+# Pendant 25 min, note l'heure où chaque but apparaît dans chaque source. Résultat en clair : branche audit, direct.json.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Mesurer
+        run: |
+          cat > m.mjs <<'JS'
+          import fs from 'node:fs';
+          const UA = { 'User-Agent': 'KOUNADIA-App/1.0' };
+          const LG = ['eng.1','eng.2','esp.1','ita.1','ger.1','fra.1','ned.1','por.1','bel.1','tur.1','uefa.champions','uefa.europa','eng.league_cup','esp.2','ita.2','ger.2','fra.2','sco.1'];
+          const seen = {}; const log = []; let raw = null;
+          const note = (src, key, home, away, sc, st) => {
+            const k = `${src}|${key}|${sc}`;
+            if (seen[k]) return; seen[k] = 1;
+            log.push({ src, at: Date.now(), key, home, away, sc, st });
+          };
+          async function pt() {
+            try {
+              const r = await fetch('https://primatips.com/liveresults?day=0&_=' + Date.now(), { headers: UA });
+              const l = await r.json();
+              raw ??= l.slice(0, 3);
+              for (const m of l) if (/^\d|HT/.test(String(m.st ?? ''))) note('pt', m.id, null, null, `${m.hs}-${m.as}`, m.st);
+            } catch (e) { log.push({ src: 'pt', err: String(e), at: Date.now() }); }
+          }
+          async function espn() {
+            await Promise.all(LG.map(async (lg) => {
+              try {
+                const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard`, { headers: UA });
+                const j = await r.json();
+                for (const e of j.events || []) {
+                  const c = e.competitions?.[0]; const st = c?.status?.type?.state;
+                  if (st !== 'in') continue;
+                  const h = c.competitors.find((x) => x.homeAway === 'home'), a = c.competitors.find((x) => x.homeAway === 'away');
+                  note('espn', e.id, h.team.displayName, a.team.displayName, `${h.score}-${a.score}`, c.status.displayClock);
+                }
+              } catch {}
+            }));
+          }
+          const end = Date.now() + 25 * 60000;
+          let i = 0;
+          while (Date.now() < end) { await pt(); if (i++ % 3 === 0) await espn(); await new Promise((r) => setTimeout(r, 5000)); }
+          // Noms PrimaTips pour rapprocher les matchs
+          let names = {};
+          try { const r = await fetch('https://primatips.com/liveresults?day=0', { headers: UA }); for (const m of await r.json()) names[m.id] = m; } catch {}
+          fs.mkdirSync('pub', { recursive: true });
+          fs.writeFileSync('pub/direct.json', JSON.stringify({ at: new Date().toISOString(), raw, log, names }));
+          console.log('événements', log.length);
+          JS
+          node m.mjs
+      - name: Publier (branche audit)
+        run: |
+          git clone -q --depth 1 -b audit "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" au
+          cp pub/direct.json au/
+          cd au && git add . && git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "mesure direct" && git push -q
