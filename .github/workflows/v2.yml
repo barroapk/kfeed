@@ -58,3 +58,20 @@ jobs:
           git add .
           git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
           git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" v2
+      - name: Pub du jour (images des 8 h GMT, puis resultats)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone -q --depth 1 -b pub "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" pubimg 2>/dev/null || mkdir -p pubimg
+          if [ "$(node scripts/v2/pub.mjs --check)" != "1" ]; then echo "Pub du jour : rien a faire"; exit 0; fi
+          npm i --no-save --no-audit --no-fund playwright-core@1.47.2 >/dev/null
+          node scripts/v2/pub.mjs
+          [ -f pubimg/latest.json ] || exit 0
+          cd pubimg
+          rm -rf .git
+          git init -q
+          git checkout -q -b pub
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "pub $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" pub
