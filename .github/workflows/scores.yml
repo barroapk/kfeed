@@ -27,7 +27,8 @@ jobs:
       - name: Etat precedent
         run: |
           mkdir -p data out
-          true
+          # Catalogue des championnats footlive (gardé d'un passage à l'autre).
+          curl -sf https://raw.githubusercontent.com/barroapk/kfeed/flcat/flcat.json -o data/flcat.json || true
       - name: Calcul
         run: node scripts/primatips.mjs > /dev/null
       - name: Publier
@@ -41,3 +42,14 @@ jobs:
           git add .
           git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
           git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" scores
+      - name: Catalogue footlive
+        run: |
+          [ -f out/flcat.json ] || exit 0
+          mkdir cat
+          cp out/flcat.json cat/
+          cd cat
+          git init -q
+          git checkout -q -b flcat
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" flcat
