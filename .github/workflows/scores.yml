@@ -11,7 +11,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       KD_KEY: ${{ secrets.KD_KEY }}
       REPO: ${{ github.repository }}
@@ -29,6 +29,8 @@ jobs:
           mkdir -p data out
           # Catalogue des championnats footlive (gardé d'un passage à l'autre).
           curl -sf https://raw.githubusercontent.com/barroapk/kfeed/flcat/flcat.json -o data/flcat.json || true
+          # Temps forts déjà trouvés (vidéos YouTube officielles des grands matchs).
+          curl -sf https://raw.githubusercontent.com/barroapk/kfeed/hl/hl.json -o data/hl.json || true
       - name: Calcul
         run: node scripts/primatips.mjs > /dev/null
       - name: Publier
@@ -53,3 +55,16 @@ jobs:
           git add .
           git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
           git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" flcat
+      - name: Temps forts
+        run: |
+          [ -f scripts/hl.mjs ] || exit 0
+          node scripts/hl.mjs || true
+          [ -f out/hl.json ] || exit 0
+          mkdir hlp
+          cp out/hl.json hlp/
+          cd hlp
+          git init -q
+          git checkout -q -b hl
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" hl
