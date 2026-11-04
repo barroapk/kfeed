@@ -48,4 +48,5 @@ jobs:
           git checkout -q -b pronos
           git add .
           git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
-          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" pronos
+          # GitHub répond parfois « Internal Server Error » : 3 essais avant d'abandonner.
+          for i in 1 2 3; do git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" pronos && break; [ "$i" = 3 ] && exit 1; sleep $((i * 15)); done
