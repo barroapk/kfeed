@@ -1,0 +1,87 @@
+name: Recherche (absences et résultats)
+# Étude des formules : télécharge pour des SAISONS PASSÉES (offre gratuite API-Football) les matchs et les absences
+# (blessés, suspendus) de grands championnats, puis publie seulement des COMPTES par match (aucun nom de joueur),
+# pour mesurer si un favori privé de joueurs gagne moins que ne l'annonce sa cote.
+# La clé reste dans les secrets GitHub (APIFOOTBALL_KEY) ; elle n'apparaît jamais dans le résultat.
+on:
+  workflow_dispatch:
+    inputs:
+      leagues:
+        description: "Championnats API-Football (39 Angleterre, 140 Espagne, 135 Italie, 78 Allemagne, 61 France, 40 Championship, 88 Pays-Bas, 94 Portugal)"
+        default: "39,140,135,78,61,40,88,94"
+      seasons:
+        description: "Saisons passées"
+        default: "2022,2023"
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AF_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+      LEAGUES: ${{ inputs.leagues }}
+      SEASONS: ${{ inputs.seasons }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Télécharger (au plus 90 demandes)
+        run: |
+          mkdir -p pub
+          node -e '
+          const fs = require("fs");
+          const KEY = process.env.AF_KEY;
+          if (!KEY) { console.log("Secret APIFOOTBALL_KEY absent"); process.exit(1); }
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          let n = 0; const errs = [];
+          async function get(path) {
+            if (n >= 90) throw new Error("limite de 90 demandes atteinte");
+            n++;
+            await sleep(7000); // offre gratuite : environ 10 demandes par minute
+            const r = await fetch("https://v3.football.api-sports.io" + path, { headers: { "x-apisports-key": KEY } });
+            const j = await r.json().catch(() => ({}));
+            const e = j.errors && (Array.isArray(j.errors) ? j.errors.length : Object.keys(j.errors).length) ? j.errors : null;
+            if (e) errs.push({ path, e });
+            return j;
+          }
+          (async () => {
+            const out = { at: new Date().toISOString(), fixtures: [], absences: {}, errors: errs, requests: 0 };
+            for (const lg of (process.env.LEAGUES || "").split(",").map((x) => x.trim()).filter(Boolean)) {
+              for (const ss of (process.env.SEASONS || "").split(",").map((x) => x.trim()).filter(Boolean)) {
+                try {
+                  const f = await get(`/fixtures?league=${lg}&season=${ss}`);
+                  for (const x of f.response || []) {
+                    if (x.fixture?.status?.short !== "FT") continue;
+                    out.fixtures.push({ id: x.fixture.id, lg: +lg, s: +ss, d: x.fixture.date, h: x.teams.home.name, a: x.teams.away.name,
+                      hid: x.teams.home.id, aid: x.teams.away.id, g: [x.goals.home, x.goals.away] });
+                  }
+                  let page = 1, total = 1;
+                  do {
+                    const j = await get(`/injuries?league=${lg}&season=${ss}${page > 1 ? "&page=" + page : ""}`);
+                    total = j.paging?.total || 1;
+                    for (const x of j.response || []) {
+                      const fid = x.fixture?.id; if (!fid) continue;
+                      const k = String(fid); const side = x.team?.id;
+                      const t = (out.absences[k] ??= {});
+                      const c = (t[side] ??= { out: 0, doubt: 0 });
+                      if (/questionable|doubt/i.test(x.player?.type || "")) c.doubt++; else c.out++;
+                    }
+                    page++;
+                  } while (page <= total && page <= 20);
+                } catch (e) { errs.push({ lg, ss, e: String(e) }); }
+              }
+            }
+            out.requests = n;
+            fs.writeFileSync("pub/absences.json", JSON.stringify(out));
+            console.log(`${out.fixtures.length} matchs, ${Object.keys(out.absences).length} matchs avec absences, ${n} demandes, erreurs : ${JSON.stringify(errs).slice(0, 500)}`);
+          })();
+          '
+      - name: Publier (comptes seulement)
+        run: |
+          cd pub
+          git init -q
+          git checkout -q -b recherche
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "recherche $(date -u +%FT%H:%MZ)"
+          for i in 1 2 3; do git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" recherche && break; [ "$i" = 3 ] && exit 1; sleep $((i * 15)); done
