@@ -36,6 +36,8 @@ jobs:
           node scripts/kio.mjs pull scores scores.json
           node scripts/kio.mjs pull markets markets.json
           node scripts/kio.mjs pull v2 v2_state.json fd.json
+          # Moteur d'infos du jour (cotes Pinnacle et 1xBet, absents, actualités), s'il est prêt.
+          node scripts/kio.mjs pull intel intel.json || true
           # Pronostics Expert (analystes) du jour, pour la Sélection.
           node scripts/kio.mjs pull pronos today_p.json
           if [ -f data/today_p.json ]; then mv -f data/today_p.json data/today.json; fi

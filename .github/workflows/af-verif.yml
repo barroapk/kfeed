@@ -3,8 +3,6 @@ name: Vérifier l'offre API-Football
 # Publie seulement le nombre de réponses et les messages d'erreur (ni la clé, ni les infos du compte).
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "20 4 * * *" # vers 04:20 (avant les coupons de 05:00) : combien d'absents sont déjà connus
 permissions:
   contents: write
 jobs:

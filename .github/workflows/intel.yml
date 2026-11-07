@@ -1,0 +1,57 @@
+name: Infos du jour (avant 05:00)
+# Moteur d'infos : cotes Pinnacle et 1xBet, absents du jour et actualités des favoris (API-Football gratuit, par date).
+# Une seule vraie collecte par jour (quota gratuit : 100 demandes) ; les autres lancements s'arrêtent tout de suite.
+# Les coupons de 05:00 l'utilisent ; après la publication, rien ne change.
+on:
+  schedule:
+    - cron: '35 3 * * *'
+    - cron: '5,35 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: intel
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KD_KEY: ${{ secrets.KD_KEY }}
+      PK_KEY: ${{ secrets.PK_KEY }}
+      AF_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Déjà fait aujourd'hui ?
+        id: done
+        run: |
+          d=$(curl -s "https://raw.githubusercontent.com/$REPO/intel/day.txt?$(date +%s)" || true)
+          if [ "$d" = "$(date -u +%F)" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; echo "Déjà fait aujourd'hui"; fi
+      - uses: actions/checkout@v4
+        if: steps.done.outputs.skip != '1'
+        with:
+          repository: barroapk/kounadia-engine
+          ssh-key: ${{ secrets.ENGINE_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: steps.done.outputs.skip != '1'
+        with:
+          node-version: 22
+      - name: Collecter
+        if: steps.done.outputs.skip != '1'
+        run: |
+          mkdir -p data
+          node scripts/v2/intel.mjs data/intel.json
+      - name: Publier (chiffré, clé Premium)
+        if: steps.done.outputs.skip != '1'
+        run: |
+          mkdir pub
+          cp data/intel.json pub/
+          PRIVATE=intel.json node scripts/kio.mjs seal pub
+          date -u +%F > pub/day.txt
+          cd pub
+          git init -q
+          git checkout -q -b intel
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "infos $(date -u +%FT%H:%MZ)"
+          for i in 1 2 3; do git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" intel && break; [ "$i" = 3 ] && exit 1; sleep $((i * 15)); done
