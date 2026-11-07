@@ -7,6 +7,11 @@ on:
     - cron: '35 3 * * *'
     - cron: '5,35 4 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Collecter maintenant (même si déjà fait ou hors 03:00-05:00)'
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -25,8 +30,13 @@ jobs:
       - name: Déjà fait aujourd'hui ?
         id: done
         run: |
+          # Le robot relance ce travail toutes les 30 min (GitHub lance mal ses horaires) : une seule vraie collecte,
+          # entre 03:00 et 05:00 UTC (absents mieux connus), sauf « force ».
+          if [ "${{ inputs.force }}" = "true" ]; then echo "Collecte forcée"; exit 0; fi
+          h=$(date -u +%H)
           d=$(curl -s "https://raw.githubusercontent.com/$REPO/intel/day.txt?$(date +%s)" || true)
-          if [ "$d" = "$(date -u +%F)" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; echo "Déjà fait aujourd'hui"; fi
+          if [ "$d" = "$(date -u +%F)" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; echo "Déjà fait aujourd'hui"; exit 0; fi
+          if [ "$h" != "03" ] && [ "$h" != "04" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; echo "Hors de la fenêtre 03:00-05:00"; fi
       - uses: actions/checkout@v4
         if: steps.done.outputs.skip != '1'
         with:
