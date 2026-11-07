@@ -1,0 +1,50 @@
+name: Vérifier l'offre API-Football
+# Teste si l'offre gratuite donne la SAISON EN COURS (matchs, absences, cotes) : 6 demandes.
+# Publie seulement le nombre de réponses et les messages d'erreur (ni la clé, ni les infos du compte).
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AF_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tester
+        run: |
+          mkdir -p pub
+          node -e '
+          const fs = require("fs");
+          const KEY = process.env.AF_KEY;
+          const day = new Date().toISOString().slice(0, 10);
+          const y = new Date().getUTCFullYear(), m = new Date().getUTCMonth();
+          const season = m >= 6 ? y : y - 1; // saison en cours (année de début)
+          const paths = ["/status", `/fixtures?date=${day}`, `/fixtures?league=39&season=${season}&next=3`,
+            `/injuries?league=39&season=${season}`, `/injuries?date=${day}`, `/odds?league=39&season=${season}`];
+          (async () => {
+            const out = { at: new Date().toISOString(), season, tests: [] };
+            for (const p of paths) {
+              await new Promise((r) => setTimeout(r, 7000));
+              const r = await fetch("https://v3.football.api-sports.io" + p, { headers: { "x-apisports-key": KEY } });
+              const j = await r.json().catch(() => ({}));
+              const t = { path: p, http: r.status, results: j.results ?? null, errors: j.errors ?? null };
+              if (p === "/status") { const s = j.response || {}; t.plan = s.subscription?.plan ?? null; t.active = s.subscription?.active ?? null; t.requests = s.requests ?? null; }
+              out.tests.push(t);
+              console.log(JSON.stringify(t));
+            }
+            fs.writeFileSync("pub/afverif.json", JSON.stringify(out, null, 1));
+          })();
+          '
+      - name: Publier
+        run: |
+          cd pub
+          git init -q
+          git checkout -q -b afverif
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "verif $(date -u +%FT%H:%MZ)"
+          for i in 1 2 3; do git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" afverif && break; [ "$i" = 3 ] && exit 1; sleep $((i * 15)); done
