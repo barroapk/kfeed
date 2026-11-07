@@ -41,9 +41,12 @@ jobs:
             }
             // Absents du jour : toutes les pages ; cotes du jour : page 1 (bookmakers présents) et nombre de pages.
             const get = async (p) => { await new Promise((r) => setTimeout(r, 7000)); const r = await fetch("https://v3.football.api-sports.io" + p, { headers: { "x-apisports-key": KEY } }); return r.json().catch(() => ({})); };
-            let page = 1, total = 1, inj = 0; const lgs = new Set(), fx = new Set();
-            do { const j = await get(`/injuries?date=${day}&page=${page}`); total = j.paging?.total || 1; for (const x of j.response || []) { inj++; lgs.add(x.league?.name + " (" + x.league?.country + ")"); fx.add(x.fixture?.id); } page++; } while (page <= total && page <= 15);
-            out.injuries = { entries: inj, fixtures: fx.size, pages: total, leagues: [...lgs].slice(0, 60) };
+            let inj = 0; const lgs = new Set(), fx = new Set();
+            // Absents : pas de paramètre « page » (refusé par ce service).
+            const ji = await get(`/injuries?date=${day}`);
+            const teams = new Set();
+            for (const x of ji.response || []) { inj++; lgs.add(x.league?.name + " (" + x.league?.country + ")"); fx.add(x.fixture?.id); teams.add(x.team?.name); }
+            out.injuries = { entries: inj, fixtures: fx.size, teams: teams.size, paging: ji.paging ?? null, errors: ji.errors ?? null, leagues: [...lgs].slice(0, 80) };
             const o = await get(`/odds?date=${day}`);
             const bk = new Set(); for (const x of o.response || []) for (const b of x.bookmakers || []) bk.add(b.name);
             out.odds = { results: o.results ?? null, pages: o.paging?.total ?? null, errors: o.errors ?? null, bookmakers: [...bk] };
