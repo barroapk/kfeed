@@ -1,0 +1,85 @@
+{
+ "at": "2026-11-07T00:19:49.529Z",
+ "season": 2026,
+ "tests": [
+  {
+   "path": "/status",
+   "http": 200,
+   "results": 0,
+   "errors": [],
+   "plan": "Free",
+   "active": true,
+   "requests": {
+    "current": 6,
+    "limit_day": 100
+   }
+  },
+  {
+   "path": "/fixtures?date=2026-11-07",
+   "http": 200,
+   "results": 1455,
+   "errors": []
+  },
+  {
+   "path": "/fixtures?league=39&season=2026&next=3",
+   "http": 200,
+   "results": 0,
+   "errors": {
+    "plan": "Free plans do not have access to this season, try from 2022 to 2024."
+   }
+  },
+  {
+   "path": "/injuries?league=39&season=2026",
+   "http": 200,
+   "results": 0,
+   "errors": {
+    "plan": "Free plans do not have access to this season, try from 2022 to 2024."
+   }
+  },
+  {
+   "path": "/injuries?date=2026-11-07",
+   "http": 200,
+   "results": 19,
+   "errors": []
+  },
+  {
+   "path": "/odds?league=39&season=2026",
+   "http": 200,
+   "results": 0,
+   "errors": {
+    "plan": "Free plans do not have access to this season, try from 2022 to 2024."
+   }
+  }
+ ],
+ "injuries": {
+  "entries": 19,
+  "fixtures": 4,
+  "teams": 5,
+  "paging": {
+   "current": 1,
+   "total": 1
+  },
+  "errors": [],
+  "leagues": [
+   "A-League (Australia)",
+   "Serie A (Italy)"
+  ]
+ },
+ "odds": {
+  "results": 10,
+  "pages": 80,
+  "errors": [],
+  "bookmakers": [
+   "William Hill",
+   "Bet365",
+   "Marathonbet",
+   "Betfair",
+   "BetVictor",
+   "Pinnacle",
+   "SBO",
+   "Betano",
+   "Dafabet",
+   "1xBet"
+  ]
+ }
+}
