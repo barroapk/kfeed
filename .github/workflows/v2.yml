@@ -62,6 +62,18 @@ jobs:
           git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "maj $(date -u +%FT%H:%MZ)"
           # GitHub répond parfois « Internal Server Error » : 3 essais avant d'abandonner.
           for i in 1 2 3; do git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" v2 && break; [ "$i" = 3 ] && exit 1; sleep $((i * 15)); done
+      - name: Resume pour KOUNADIA Admin (moteur d'infos, sans pronostic)
+        continue-on-error: true
+        run: |
+          [ -f out/admin.json ] || exit 0
+          mkdir adm
+          cp out/admin.json adm/
+          cd adm
+          git init -q
+          git checkout -q -b admin
+          git add .
+          git -c user.name=bot -c user.email=actions@users.noreply.github.com commit -qm "admin $(date -u +%FT%H:%MZ)"
+          for i in 1 2 3; do git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" admin && break; sleep $((i * 15)); done
       - name: Pub du jour (images des 8 h GMT, puis resultats)
         continue-on-error: true
         env:
